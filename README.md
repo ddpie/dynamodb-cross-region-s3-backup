@@ -80,7 +80,7 @@ sequenceDiagram
 
 **生命周期转换流程**：
 ```
-Standard (30天) → Standard-IA (60天) → Glacier (180天) → Deep Archive (460天) → 删除
+第30天转IA → 第90天转Glacier → 第270天转Deep Archive → 第730天删除
 ```
 
 ### 备份存储结构
