@@ -1,5 +1,7 @@
 # DynamoDB自动备份方案
 
+基于AWS Lambda和EventBridge的DynamoDB跨区域自动备份解决方案，支持多表每日完整备份到S3，自动生命周期管理，提供完整的灾难恢复能力。
+
 ## 方案概述
 
 - **多表备份**: 支持同时备份多个DynamoDB表
