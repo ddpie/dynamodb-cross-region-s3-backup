@@ -22,14 +22,5 @@
     "retention": {
       "daily_backups": 730
     }
-  },
-  "s3_lifecycle": {
-    "daily_backup": {
-      "transitions": [
-        {"days": 30, "storage_class": "STANDARD_IA"},
-        {"days": 90, "storage_class": "GLACIER"},
-        {"days": 270, "storage_class": "DEEP_ARCHIVE"}
-      ]
-    }
   }
 }

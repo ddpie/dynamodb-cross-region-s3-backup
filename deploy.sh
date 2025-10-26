@@ -71,18 +71,22 @@ echo "前置条件检查通过"
 
 # 1. 创建IAM角色
 echo "创建IAM角色..."
-aws iam create-role \
-    --role-name $ROLE_NAME \
-    --assume-role-policy-document '{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {"Service": "lambda.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-            }
-        ]
-    }'
+if aws iam get-role --role-name $ROLE_NAME &> /dev/null; then
+    echo "IAM角色 $ROLE_NAME 已存在，跳过创建"
+else
+    aws iam create-role \
+        --role-name $ROLE_NAME \
+        --assume-role-policy-document '{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"},
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }'
+fi
 
 # 2. 附加策略
 echo "附加IAM策略..."
@@ -142,7 +146,7 @@ aws iam put-role-policy \
                     "logs:PutLogEvents",
                     "logs:PutRetentionPolicy"
                 ],
-                "Resource": "arn:aws:logs:'$TABLE_REGION':'$ACCOUNT_ID':log-group:/aws-dynamodb/*"
+                "Resource": "arn:aws:logs:*:'$ACCOUNT_ID':log-group:/aws/lambda/*"
             }
         ]
     }'
@@ -171,34 +175,59 @@ zip function.zip lambda_backup_function.py
 
 # 4. 创建Lambda函数
 echo "创建Lambda函数..."
-aws lambda create-function \
-    --function-name $FUNCTION_NAME \
-    --runtime python3.9 \
-    --role arn:aws:iam::$ACCOUNT_ID:role/$ROLE_NAME \
-    --handler lambda_backup_function.lambda_handler \
-    --zip-file fileb://function.zip \
-    --timeout 900 \
-    --environment Variables="{TABLE_ARNS=$TABLE_ARNS,S3_BUCKET=$S3_BUCKET,S3_REGION=$S3_REGION}"
+if aws lambda get-function --function-name $FUNCTION_NAME --region $TABLE_REGION &> /dev/null; then
+    echo "Lambda函数 $FUNCTION_NAME 已存在，更新代码..."
+    aws lambda update-function-code \
+        --function-name $FUNCTION_NAME \
+        --zip-file fileb://function.zip \
+        --region $TABLE_REGION
+    
+    aws lambda update-function-configuration \
+        --function-name $FUNCTION_NAME \
+        --timeout 900 \
+        --environment Variables="{TABLE_ARNS=$TABLE_ARNS,S3_BUCKET=$S3_BUCKET,S3_REGION=$S3_REGION,SOURCE_REGION=$TABLE_REGION}" \
+        --region $TABLE_REGION
+else
+    aws lambda create-function \
+        --function-name $FUNCTION_NAME \
+        --runtime python3.9 \
+        --role arn:aws:iam::$ACCOUNT_ID:role/$ROLE_NAME \
+        --handler lambda_backup_function.lambda_handler \
+        --zip-file fileb://function.zip \
+        --timeout 900 \
+        --environment Variables="{TABLE_ARNS=$TABLE_ARNS,S3_BUCKET=$S3_BUCKET,S3_REGION=$S3_REGION,SOURCE_REGION=$TABLE_REGION}" \
+        --region $TABLE_REGION
+fi
 
 # 5. 创建每日备份调度
 echo "创建每日备份调度..."
-aws events put-rule \
-    --name daily-backup \
-    --schedule-expression 'cron(0 2 * * ? *)'
+RULE_NAME="dynamodb-backup-daily-${TABLE_REGION}"
 
+if aws events describe-rule --name $RULE_NAME --region $TABLE_REGION &> /dev/null; then
+    echo "EventBridge规则 $RULE_NAME 已存在，跳过创建"
+else
+    aws events put-rule \
+        --name $RULE_NAME \
+        --schedule-expression 'cron(0 2 * * ? *)' \
+        --region $TABLE_REGION
+fi
+
+# 添加Lambda权限（如果已存在会报错但不影响）
 aws lambda add-permission \
     --function-name $FUNCTION_NAME \
-    --statement-id daily-backup \
+    --statement-id ${RULE_NAME}-permission \
     --action lambda:InvokeFunction \
     --principal events.amazonaws.com \
-    --source-arn arn:aws:events:us-east-1:$ACCOUNT_ID:rule/daily-backup
+    --source-arn arn:aws:events:$TABLE_REGION:$ACCOUNT_ID:rule/$RULE_NAME \
+    --region $TABLE_REGION 2>/dev/null || echo "Lambda权限已存在"
 
 aws events put-targets \
-    --rule daily-backup \
+    --rule $RULE_NAME \
     --targets '[{
         "Id": "1",
-        "Arn": "arn:aws:lambda:us-east-1:'$ACCOUNT_ID':function:'$FUNCTION_NAME'"
-    }]'
+        "Arn": "arn:aws:lambda:'$TABLE_REGION':'$ACCOUNT_ID':function:'$FUNCTION_NAME'"
+    }]' \
+    --region $TABLE_REGION
 
 echo "部署完成！"
 
@@ -210,7 +239,7 @@ else
     echo "✗ Lambda函数创建失败"
 fi
 
-if aws events describe-rule --name daily-backup --region $TABLE_REGION &> /dev/null; then
+if aws events describe-rule --name $RULE_NAME --region $TABLE_REGION &> /dev/null; then
     echo "✓ EventBridge规则创建成功"
 else
     echo "✗ EventBridge规则创建失败"

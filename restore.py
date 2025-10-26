@@ -114,8 +114,8 @@ def restore_from_s3(table_name, target_region='us-west-2', restore_date=None):
     except Exception as e:
         print(f"\n恢复失败: {e}")
         print("\n提示：")
-        print("1. 检查table_schema.json是否存在且格式正确")
-        print("2. 使用以下命令重新导出表结构：")
+        print("1. 检查S3备份路径是否正确")
+        print("2. 如果S3备份中没有表结构，可以手动导出：")
         print(f"   python export_table_schema.py {table_name} {backup_config['source_region']}")
 
 def get_latest_backup_prefix(s3, bucket, table_name):

@@ -12,8 +12,16 @@ def lambda_handler(event, context):
     table_arns = os.environ['TABLE_ARNS'].split(',')  # 逗号分隔的表ARN列表
     s3_bucket = os.environ['S3_BUCKET']
     s3_region = os.environ.get('S3_REGION', 'us-west-2')
+    source_region = os.environ.get('SOURCE_REGION', 'us-east-1')
     
-    dynamodb = boto3.client('dynamodb', region_name='us-east-1')
+    if not table_arns or table_arns[0].strip() == '':
+        logger.error("TABLE_ARNS环境变量为空")
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'success': False, 'error': 'TABLE_ARNS is empty'})
+        }
+    
+    dynamodb = boto3.client('dynamodb', region_name=source_region)
     s3 = boto3.client('s3', region_name=s3_region)
     
     results = []
