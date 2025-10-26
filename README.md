@@ -4,6 +4,7 @@
 
 - **多表备份**: 支持同时备份多个DynamoDB表
 - **每日完整备份**: 每天凌晨2点执行完整表导出
+- **表结构自动备份**: 每次备份时自动保存表结构，恢复时无需手动配置
 - **跨区域存储**: us-east-1 → us-west-2 S3
 - **自动生命周期**: 30天后转IA，90天后转Glacier，270天后转Deep Archive
 - **保留期限**: 730天（2年）后自动删除
@@ -151,12 +152,12 @@ aws s3api put-bucket-lifecycle-configuration \
     --lifecycle-configuration file://s3-lifecycle.json
 ```
 
-4. **导出表结构（可选，用于本地备份）**
+4. **导出表结构（可选）**
 ```bash
 python export_table_schema.py YOUR_TABLE us-east-1
 ```
 
-Lambda函数会在每次备份时自动保存表结构到S3，此步骤仅用于本地备份。
+**说明**：Lambda函数会在每次备份时自动保存表结构到S3（与数据一起备份），此步骤仅用于本地备份参考。恢复时会自动从S3备份中读取表结构，无需手动维护。
 
 ## 使用指南
 
