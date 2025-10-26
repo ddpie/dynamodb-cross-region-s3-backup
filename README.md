@@ -50,6 +50,9 @@ sequenceDiagram
     
     Note over EB: 每日 02:00
     EB->>LF: 触发备份任务
+    LF->>DDB: 调用 describe-table
+    DDB-->>LF: 返回表结构
+    LF->>S3: 保存 table_schema.json
     LF->>DDB: 调用 export-table-to-point-in-time
     DDB->>S3: 导出完整表数据到 S3
     S3-->>LF: 返回导出状态
